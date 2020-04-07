@@ -1,17 +1,17 @@
 import numpy as np
 import torch
 from nltk.translate.bleu_score import sentence_bleu
+import os
 
 class INFER(object):
-    def __init__(self, sos_idx, eos_idx, pad_idx, i2w, eval_data, args, device):
+    def __init__(self, vocab_obj, args, device):
         super().__init__()
 
-        self.m_sos_idx = sos_idx
-        self.m_eos_idx = eos_idx
-        self.m_pad_idx = pad_idx
-        self.m_i2w = i2w
+        self.m_sos_idx = vocab_obj.sos_idx
+        self.m_eos_idx = vocab_obj.eos_idx
+        self.m_pad_idx = vocab_obj.pad_idx
+        self.m_i2w = vocab_obj.m_i2w
 
-        self.m_eval_data = eval_data
         self.m_epoch = args.epochs
         self.m_batch_size = args.batch_size 
         self.m_mean_loss = 0
@@ -21,40 +21,48 @@ class INFER(object):
 
         self.m_anneal_func = args.anneal_func
         self.m_device = device
+        self.m_model_path = args.model_path
 
     def f_init_infer(self, network, reload_model=False):
         if reload_model:
             print("reload model")
+            model_name = os.path.join(self.m_model_path, "reviewdi_model_best.pt")
+            print("model name", model_name)
+            check_point = torch.load(model_name)
+            network.load_state_dict(check_point['model'])
+
         self.m_network = network
 
-        # self.m_Recon_loss_fn = Reconstruction_loss(self.m_device)
-        # self.m_KL_loss_fn = KL_loss(self.m_device)
-        # self.m_RRe_loss_fn = RRe_loss(self.m_device)
-        # self.m_ARe_loss_fn = ARe_loss(self.m_device)
-
-    def f_inference(self):
+    def f_inference(self, eval_data):
         self.m_mean_loss = 0
-        for epoch_i in range(self.m_epoch):
-            loss_epoch = self.f_inference_epoch()
-            
-    def f_inference_epoch(self):
+        # for epoch_i in range(self.m_epoch):
         # batch_size = args.batch_size
 
         infer_loss_list = []
+        
+        batch_index = 0
 
-        for input_batch, target_batch, ARe_batch, RRe_batch, length_batch in self.m_eval_data:
+        for input_batch, user_batch,  target_batch, ARe_batch, RRe_batch, length_batch in eval_data:
+
+            if batch_index > 0:
+                break
+
+            batch_index += 1
+
             input_batch = input_batch.to(self.m_device)
+            user_batch = user_batch.to(self.m_device)
             length_batch = length_batch.to(self.m_device)
             target_batch = target_batch.to(self.m_device)
             RRe_batch = RRe_batch.to(self.m_device)
-            ARe_batch = ARe_batch.to(self .m_device)
+            ARe_batch = ARe_batch.to(self.m_device)
 
-            logp, z_mean, z_logv, z, s_mean, s_logv, s, ARe_pred, RRe_pred = self.m_network(input_batch, length_batch)
+            logp, z_mean_prior, z_mean, z_logv, z, s_mean, s_logv, s, ARe_pred, RRe_pred = self.m_network(input_batch, user_batch, length_batch)
             print(" "*10, "*"*10, " "*10)
             
             print("->"*10, *idx2word(input_batch, i2w=self.m_i2w, pad_idx=self.m_pad_idx), sep='\n')
 
             # mean = mean.unsqueeze(0)
+            print("size", z_mean.size(), s_mean.size())
             mean = torch.cat([z_mean, s_mean], dim=1)
             max_seq_len = max(length_batch)
             samples, z = self.f_decode_text(mean, max_seq_len)
@@ -62,7 +70,6 @@ class INFER(object):
             # print("->"*10, *idx2word(input_batch, i2w=self.m_i2w, pad_idx=self.m_pad_idx), sep='\n')
 
             print("<-"*10, *idx2word(samples, i2w=self.m_i2w, pad_idx=self.m_pad_idx), sep='\n')
-
             
     def f_decode_text(self, z, max_seq_len, n=4):
         if z is None:
