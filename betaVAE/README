@@ -1,0 +1,7 @@
+ for training, the command is
+ 
+ on amazon dataset:
+ CUDA_VISIBLE_DEVICES=1 python main.py --data_dir “../data/amazon/clothing” --data_file “tokenized_amazon.pickle” -af ‘beta’
+ 
+ on yelp dataset:
+ CUDA_VISIBLE_DEVICES=1 python main_yelp.py --data_dir "../data/yelp/" -bs 256
